@@ -1,14 +1,10 @@
+// THE MISPLACED MANSION - APP.JS
 const API_URL = window.location.origin;
+
 let items = []; 
 let currentUser = null;
-let currentFilter = 'All';
-let uploadedFileBase64 = null;
-let profilePicBase64 = null; // New for profile
-
-// Chat State
-let currentChatPostId = null;
-let currentChatReceiverId = null;
-let chatPollInterval = null;
+let token = null;
+let regEmail = '';
 
 function authHeaders() {
     const t = localStorage.getItem('token');
@@ -16,46 +12,51 @@ function authHeaders() {
     return { 'Authorization': t };
 }
 
+// 1.INITIALIZATION
 document.addEventListener('DOMContentLoaded', () => {
     checkSession();
     renderFeed('All');
 
-    // Search
-    const searchInput = document.getElementById('search-input');
-    if(searchInput) {
-        searchInput.addEventListener('input', () => renderFeed(currentFilter));
-    }
-    
-    // Scroll
+    // SMART SCROLL LISTENER
     window.addEventListener('scroll', () => {
         const nav = document.getElementById('main-nav');
-        if(window.scrollY > 50) nav?.classList.add('scrolled-mode');
-        else nav?.classList.remove('scrolled-mode');
+        if(!nav) return;
+
+        // If scrolled down more than 50px
+        if (window.scrollY > 50) {
+            nav.classList.add('scrolled-mode');
+        } else {
+            // Back at the top
+            nav.classList.remove('scrolled-mode');
+            
+            // Auto-close the menu if it was open when they scrolled back to top
+            const menu = document.getElementById('mobile-menu');
+            const btn = document.getElementById('hamburger-btn');
+            
+            if(menu && menu.classList.contains('menu-open')) {
+                menu.classList.remove('menu-open');
+                btn.classList.remove('active');
+            }
+        }
     });
 
     const reportForm = document.getElementById('form-report');
     if(reportForm) reportForm.addEventListener('submit', handleReportSubmit);
 });
 
-// --- AUTH & SESSION ---
-window.checkSession = async function() {
-    const t = localStorage.getItem('token');
-    if(t) {
-        // Fetch fresh user data to get bio/pic
-        try {
-            const res = await fetch(`${API_URL}/user-info`, { headers: { 'Authorization': t }});
-            if(res.ok) {
-                currentUser = await res.json();
-                localStorage.setItem('user', JSON.stringify(currentUser));
-                updateNavUI(true);
-            } else {
-                throw new Error("Invalid token");
-            }
-        } catch(e) {
-            console.log("Session invalid");
-            logoutUser(false);
-        }
+// --- 2. AUTHENTICATION ---
+
+window.checkSession = function() {
+    const storedUser = localStorage.getItem('user');
+    const storedToken = localStorage.getItem('token');
+    
+    if (storedUser && storedToken) {
+        currentUser = JSON.parse(storedUser);
+        token = storedToken;
+        updateNavUI(true);
     } else {
+        currentUser = null;
+        token = null;
         updateNavUI(false);
     }
 }
@@ -63,352 +64,492 @@ window.checkSession = async function() {
 window.updateNavUI = function(isLoggedIn) {
     const navAuth = document.getElementById('nav-auth-section');
     const mobileAuth = document.getElementById('mobile-auth-section');
-    let html = '';
     
-    if (isLoggedIn && currentUser) {
-        const name = currentUser.username.split('@')[0];
+    let html = '';
+    if (isLoggedIn) {
+        const simpleName = currentUser.username.split('@')[0];
         html = `
             <div class="flex items-center gap-3">
-                <button onclick="openProfileModal()" class="text-sm text-white hover:text-blue-400 font-bold flex items-center gap-2">
-                    <img src="${currentUser.profilePic || 'https://via.placeholder.com/30'}" class="w-6 h-6 rounded-full border border-gray-500 object-cover">
-                    ${name}
+                <button onclick="window.openProfileModal()" class="text-sm text-white hover:text-blue-400 font-bold transition hover:underline">
+                    <i class="fa-solid fa-user-circle mr-1 text-blue-400"></i> ${simpleName}
                 </button>
-                <button onclick="logoutUser()" class="text-xs border border-red-500 text-red-400 px-3 py-1 rounded hover:bg-red-500 hover:text-white transition">Logout</button>
-            </div>`;
+                <button onclick="window.logoutUser()" class="text-xs border border-red-500 text-red-400 px-3 py-1 rounded hover:bg-red-500 hover:text-white transition">Logout</button>
+            </div>
+        `;
     } else {
         html = `
-            <button onclick="openAuthModal('login')" class="text-sm text-gray-300 font-bold mr-4">Login</button>
-            <button onclick="openAuthModal('register')" class="btn !w-auto !h-8 !px-4 !text-xs">Register</button>`;
+            <button onclick="window.openAuthModal('login')" class="text-sm text-gray-300 hover:text-white font-bold mr-4">Login</button>
+            <button onclick="window.openAuthModal('register')" class="btn !w-auto !h-9 !px-4 !text-xs !bg-blue-600 shadow-lg shadow-blue-500/30">Register</button>
+        `;
     }
+
     if(navAuth) navAuth.innerHTML = html;
     if(mobileAuth) mobileAuth.innerHTML = html;
 }
 
-window.logoutUser = function(confirmLogout = true) {
-    if (confirmLogout && !confirm("Log out?")) return;
-    localStorage.clear();
-    currentUser = null;
-    location.reload();
-};
+window.openAuthModal = function(mode) {
+    document.getElementById('modal-auth').classList.remove('hidden');
+    window.toggleAuthMode(mode);
+}
 
+window.toggleAuthMode = function(mode) {
+    const loginView = document.getElementById('auth-login-view');
+    const regView = document.getElementById('auth-register-view');
+    
+    if (mode === 'login') {
+        loginView.classList.remove('hidden');
+        regView.classList.add('hidden');
+    } else {
+        loginView.classList.add('hidden');
+        regView.classList.remove('hidden');
+        document.getElementById('reg-step-1').classList.remove('hidden');
+        document.getElementById('reg-step-2').classList.add('hidden');
+    }
+}
+
+// REGISTER FLOW
+window.sendOtp = async function() {
+    const email = document.getElementById('reg-email').value;
+    if(!email.endsWith('@gmail.com')) return alert("Please use a valid @gmail.com address");
+    
+    regEmail = email;
+    const btn = document.querySelector('#reg-step-1 button');
+    btn.innerText = "Sending...";
+    btn.disabled = true;
+
+    try {
+        const res = await fetch(`${API_URL}/auth/send-otp`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: email })
+        });
+        const data = await res.json();
+        
+        if (res.ok) {
+    alert("OTP generated. Please contact admin to receive it (demo mode).");
+    document.getElementById('reg-step-1').classList.add('hidden');
+    document.getElementById('reg-step-2').classList.remove('hidden');
+}
+else {
+            alert(data.error);
+            btn.disabled = false;
+            btn.innerText = "Send OTP";
+        }
+    } catch (e) {
+        alert("Something went wrong. Please try again.");
+        btn.disabled = false;
+    }
+}
+
+window.completeRegistration = async function() {
+    const otp = document.getElementById('reg-otp').value.trim();
+    const password = document.getElementById('reg-pass').value;
+
+    try {
+        const res = await fetch(`${API_URL}/auth/register-complete`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: regEmail, otp, password })
+        });
+        const data = await res.json();
+
+        if (res.ok) {
+            alert("Account Created!");
+            localStorage.setItem('token', data.token);
+            localStorage.setItem('user', JSON.stringify({ username: data.username }));
+            window.location.reload();
+        } else {
+            alert(data.error);
+        }
+    } catch (e) {
+        alert("Registration Failed.");
+    }
+}
+
+// LOGIN FLOW
 window.loginUser = async function() {
     const email = document.getElementById('login-email').value;
     const password = document.getElementById('login-pass').value;
+
     try {
         const res = await fetch(`${API_URL}/login`, {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username: email, password })
         });
+
         const data = await res.json();
-        if(res.ok) {
-            localStorage.setItem('token', data.token);
-            localStorage.setItem('user', JSON.stringify(data));
-            location.reload();
-        } else alert(data.error);
-    } catch(e) { alert("Login Error"); }
+
+        if (!res.ok) {
+            return alert(data.error || "Login Failed");
+        }
+
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify({ username: data.username }));
+
+        location.reload();
+    } catch (err) {
+        alert("Server Error");
+    }
 };
 
-// --- PROFILE EDITING ---
-window.openProfileModal = function() {
-    if(!currentUser) return;
-    
-    // Reset Edit State
-    document.getElementById('profile-bio').classList.remove('hidden');
-    document.getElementById('profile-bio-input').classList.add('hidden');
-    document.getElementById('btn-edit-profile').classList.remove('hidden');
-    document.getElementById('btn-save-profile').classList.add('hidden');
+window.logoutUser = function() {
+    if (!confirm("Are you sure you want to log out?")) return;
 
-    // Populate Data
-    document.getElementById('profile-username').innerText = currentUser.username.split('@')[0];
-    document.getElementById('profile-bio').innerText = currentUser.bio || "No bio yet.";
-    document.getElementById('profile-bio-input').value = currentUser.bio || "";
-    
-    const imgEl = document.getElementById('profile-img-display');
-    imgEl.src = currentUser.profilePic || "https://via.placeholder.com/100?text=User";
-    
-    // Reputation Logic (simplified for brevity)
-    const points = currentUser.reputation || 0;
-    document.getElementById('profile-points').innerText = points;
-    document.getElementById('profile-tag').innerText = points > 100 ? "DETECTIVE" : "NOVICE";
-    
-    document.getElementById('modal-profile').classList.remove('hidden');
+    localStorage.clear(); // important
+    currentUser = null;
+    token = null;
+
+    location.reload();
 };
 
-window.toggleEditProfile = function() {
-    document.getElementById('profile-bio').classList.add('hidden');
-    document.getElementById('profile-bio-input').classList.remove('hidden');
-    document.getElementById('btn-edit-profile').classList.add('hidden');
-    document.getElementById('btn-save-profile').classList.remove('hidden');
-};
 
-window.handleProfilePicSelect = function(e) {
-    const file = e.target.files[0];
-    if(!file) return;
-    const reader = new FileReader();
-    reader.onload = function(evt) {
-        profilePicBase64 = evt.target.result;
-        document.getElementById('profile-img-display').src = profilePicBase64;
-    };
-    reader.readAsDataURL(file);
-};
+// --- 3. RENDER FEED ---
 
-window.saveProfile = async function() {
-    const newBio = document.getElementById('profile-bio-input').value;
-    const updates = { bio: newBio };
-    if(profilePicBase64) updates.profilePic = profilePicBase64;
-
-    try {
-        const res = await fetch(`${API_URL}/profile`, {
-            method: 'PUT',
-            headers: {'Content-Type': 'application/json', ...authHeaders()},
-            body: JSON.stringify(updates)
-        });
-        const data = await res.json();
-        if(res.ok) {
-            currentUser.bio = data.bio;
-            currentUser.profilePic = data.profilePic;
-            localStorage.setItem('user', JSON.stringify(currentUser));
-            alert("Profile Updated!");
-            openProfileModal(); // Refresh view
-            updateNavUI(true);
-        } else alert("Update failed");
-    } catch(e) { alert("Server Error"); }
-};
-
-// --- FEED & SEARCH ---
 window.renderFeed = async function(filterType) {
     const grid = document.getElementById('feed-grid');
-    if(!grid) return;
+    if (!grid) return;
     
-    if(filterType) currentFilter = filterType;
-    
-    if(items.length === 0) {
-        try {
-            const res = await fetch(`${API_URL}/posts`);
-            items = await res.json();
-        } catch(e) { items = []; }
-    }
+    try {
+        const res = await fetch(`${API_URL}/posts`);
+        items = await res.json();
+    } catch (e) { items = []; }
 
     grid.innerHTML = ''; 
-    const searchVal = document.getElementById('search-input')?.value.toLowerCase() || '';
 
-    const filtered = items.filter(item => {
-        const matchesType = (currentFilter === 'All') || (item.type === currentFilter);
-        const matchesSearch = (item.title+item.description+item.location).toLowerCase().includes(searchVal);
-        return matchesType && matchesSearch;
-    });
+    const filteredItems = filterType === 'All' ? items : items.filter(item => item.type === filterType);
 
-    if(filtered.length === 0) {
+    if (filteredItems.length === 0) {
         grid.innerHTML = `<div class="col-span-3 text-center text-gray-500 py-10">No items found.</div>`;
         return;
     }
 
-    filtered.forEach(item => {
-        const bg = item.imageUrl ? `background-image: url('${item.imageUrl}')` : 'background-color: #333';
-        const isResolved = item.status === 'Resolved';
-        const card = `
-        <div class="card group ${isResolved ? 'grayscale opacity-60' : ''}">
-            <div class="card__img" style="${bg}"></div>
-            <div class="card__img--hover" style="${bg}"></div>
-            <div class="card__info">
-                <span class="card__category text-${item.type === 'Lost' ? 'amber' : 'emerald'}-400">${item.type}</span>
-                <h3 class="card__title truncate">${item.title}</h3>
-                <span class="card__by text-xs">at ${item.location}</span>
-                <button onclick="openDetails('${item._id}')" class="btn !h-8 !text-xs mt-4">Details</button>
-            </div>
-        </div>`;
-        grid.innerHTML += card;
-    });
-};
-
-// --- DETAILS & CHAT SYSTEM ---
-window.openDetails = function(id) {
-    const item = items.find(i => i._id === id);
-    if(!item) return;
-
-    // Reset Chat Interval
-    if(chatPollInterval) clearInterval(chatPollInterval);
-    currentChatPostId = item._id;
-
-    // Populate Info
-    document.getElementById('detail-title').innerText = item.title;
-    document.getElementById('detail-desc').innerText = item.description;
-    document.getElementById('detail-type').innerText = item.type;
-    document.getElementById('detail-loc').innerText = item.location;
-    
-    const media = document.getElementById('detail-media');
-    media.innerHTML = item.imageUrl ? `<img src="${item.imageUrl}" class="w-full h-full object-cover">` : `<div class="w-full h-full flex items-center justify-center text-gray-500">No Image</div>`;
-
-    // Setup Actions (PIN / Verify)
-    const actions = document.getElementById('detail-actions');
-    const isOwner = currentUser && currentUser.username === item.authorName;
-    
-    if(item.status === 'Resolved') {
-        actions.innerHTML = `<div class="text-green-500 font-bold text-center">ITEM RESOLVED</div>`;
-    } else if(isOwner) {
-        actions.innerHTML = `
-            <div class="bg-gray-800 p-3 rounded">
-                <p class="text-xs text-gray-400 mb-2">Verify Claimant PIN:</p>
-                <div class="flex gap-2">
-                    <input id="verify-pin-input" class="w-20 bg-black border border-gray-600 text-white text-center rounded">
-                    <button onclick="verifyPin('${item._id}')" class="btn !w-auto !h-8 !text-xs bg-green-600">Verify</button>
-                </div>
-            </div>`;
-    } else {
-        actions.innerHTML = `<button onclick="generatePin('${item._id}')" class="btn w-full">I Found/Lost This!</button>
-        <div id="pin-display" class="hidden text-center mt-2 text-white font-bold text-xl tracking-widest bg-blue-900/50 p-2 rounded"></div>`;
-    }
-
-    // Load Chat
-    loadChat(item);
-    document.getElementById('modal-details').classList.remove('hidden');
-    
-    // Auto-refresh chat every 3 seconds
-    chatPollInterval = setInterval(() => loadChat(item), 3000);
-};
-
-window.loadChat = async function(item) {
-    if(!currentUser) {
-        document.getElementById('chat-display').innerHTML = `<p class="text-gray-500 text-center mt-10">Login to chat.</p>`;
-        return;
-    }
-
-    try {
-        const res = await fetch(`${API_URL}/messages/${item._id}`, { headers: authHeaders() });
-        const data = await res.json();
-        const display = document.getElementById('chat-display');
-        const inputArea = document.getElementById('chat-input-area');
-
-        if(data.isOwner) {
-            // Owner View: List of Conversations
-            inputArea.classList.add('hidden'); // Owner selects a chat first
-            if(data.conversations.length === 0) {
-                display.innerHTML = `<p class="text-gray-500 text-center text-xs mt-4">No inquiries yet.</p>`;
-            } else {
-                let html = `<p class="text-xs text-gray-400 mb-2">Recent Inquiries:</p>`;
-                data.conversations.forEach(c => {
-                    html += `
-                    <div onclick="openSpecificChat('${item._id}', '${c.userId}')" class="bg-gray-800 p-3 rounded mb-2 cursor-pointer hover:bg-gray-700">
-                        <p class="text-xs font-bold text-blue-400">User ID: ${c.userId.substr(-4)}</p>
-                        <p class="text-xs text-gray-300 truncate">${c.lastMessage}</p>
-                    </div>`;
-                });
-                display.innerHTML = html;
-            }
-        } else {
-            // Viewer View: Chat with Owner
-            currentChatReceiverId = data.ownerId;
-            inputArea.classList.remove('hidden');
-            renderMessages(data.messages, data.ownerId);
+    filteredItems.forEach(item => {
+        const colorClass = item.type === 'Lost' ? '#f59e0b' : '#10b981';
+        let bgStyle = item.imageUrl ? `background-image: url('${item.imageUrl}');` : `background-color: #333;`;
+        
+        let displayDate = "Just now";
+        if (item.createdAt) {
+            const d = new Date(item.createdAt);
+            displayDate = d.toLocaleDateString();
+        } else if (item.date) {
+            displayDate = item.date.split('•')[0];
         }
-    } catch(e) { console.error("Chat load error", e); }
-};
 
-window.openSpecificChat = async function(postId, userId) {
-    currentChatReceiverId = userId;
-    // Show input for owner now
-    document.getElementById('chat-input-area').classList.remove('hidden');
-    
-    // Fetch specific messages
-    const res = await fetch(`${API_URL}/messages/${postId}/${userId}`, { headers: authHeaders() });
-    const data = await res.json();
-    renderMessages(data.messages, userId);
-};
+        // Format Author Name
+        let authorDisplay = "Anonymous";
+        if (item.authorName) {
+            authorDisplay = item.authorName.split('@')[0];
+        }
 
-function renderMessages(messages, otherId) {
-    const display = document.getElementById('chat-display');
-    if(!messages || messages.length === 0) {
-        display.innerHTML = `<p class="text-gray-500 text-center text-xs mt-10">Start the conversation...</p>`;
-        return;
-    }
-    
-    let html = '';
-    messages.forEach(msg => {
-        const isMe = msg.sender === currentUser._id || msg.sender === currentUser.id;
-        html += `
-        <div class="flex ${isMe ? 'justify-end' : 'justify-start'}">
-            <div class="${isMe ? 'bg-blue-600' : 'bg-gray-700'} p-2 rounded-lg max-w-[80%] text-xs text-white">
-                ${msg.content}
+        const isResolved = item.status === 'Resolved';
+        const resolvedClass = isResolved ? 'grayscale opacity-60' : '';
+        const resolvedBadge = isResolved ? '<div class="absolute top-2 right-2 bg-red-600 text-white text-[10px] font-bold px-2 py-1 rounded z-20">RESOLVED</div>' : '';
+
+        const cardHTML = `
+        <div class="card group ${resolvedClass}">
+            ${resolvedBadge}
+            <div class="card__img relative flex items-center justify-center" style="visibility:visible; ${bgStyle}"></div>
+            <div class="card__img--hover" style="${bgStyle}"></div>
+            <div class="card__info">
+                <div class="flex justify-between items-center mb-1">
+                    <span class="card__category" style="color:${colorClass}">${item.type}</span>
+                    <span class="text-[10px] text-gray-500">${displayDate}</span>
+                </div>
+                <h3 class="card__title truncate mb-0">${item.title}</h3>
+                
+                <div class="flex items-center gap-2 mb-3 mt-1">
+                    <div class="w-5 h-5 rounded-full bg-slate-700 flex items-center justify-center text-[10px] text-white">
+                        <i class="fa-solid fa-user"></i>
+                    </div>
+                    <span class="text-xs text-blue-400 font-bold">${authorDisplay}</span>
+                </div>
+
+                <span class="card__by block mb-3 text-sm">at <span class="card__author text-gray-300">${item.location}</span></span>
+                
+                <button onclick="window.openDetails('${item._id}')" class="w-full py-2 rounded border border-gray-600 text-xs font-bold text-gray-300 hover:bg-white/10 transition">
+                    ${isResolved ? 'View History' : 'More Details'}
+                </button>
             </div>
         </div>`;
+        grid.innerHTML += cardHTML;
     });
-    display.innerHTML = html;
-    display.scrollTop = display.scrollHeight; // Auto scroll to bottom
+
+    if(filterType !== 'All') {
+        const browse = document.getElementById('browse');
+        if(browse) browse.scrollIntoView({ behavior: 'smooth' });
+    }
 }
 
-window.sendChatMessage = async function() {
-    const input = document.getElementById('chat-msg-input');
-    const content = input.value.trim();
-    if(!content || !currentChatReceiverId) return;
+// --- 4. DETAILS MODAL ---
+
+window.openDetails = function(id) {
+    const item = items.find(i => i._id == id || i.id == id);
+    if(!item) return alert("Error loading item.");
+
+    const modal = document.getElementById('modal-details');
+    
+    document.getElementById('detail-type').innerText = (item.type || "ITEM").toUpperCase() + " ITEM";
+    document.getElementById('detail-title').innerText = item.title || "Untitled";
+    document.getElementById('detail-loc').innerText = item.location || "Unknown";
+    
+    const rawDate = item.createdAt || item.date;
+    const displayDate = rawDate ? new Date(rawDate).toLocaleString() : "Recently";
+    document.getElementById('detail-date').innerText = displayDate;
+
+    // --- Report Author Info ---
+    let authorDisplay = "Anonymous";
+    if (item.authorName) authorDisplay = item.authorName.split('@')[0];
+    
+    const descArea = document.getElementById('detail-desc');
+    descArea.innerHTML = `
+        ${item.description || "No description."}
+        <div class="mt-6 pt-4 border-t border-gray-700 flex items-center gap-3">
+            <div class="w-10 h-10 rounded-full bg-blue-900/50 flex items-center justify-center text-blue-400">
+                <i class="fa-solid fa-user text-lg"></i>
+            </div>
+            <div>
+                <p class="text-[10px] text-gray-500 uppercase font-bold">Reported By</p>
+                <p class="text-sm text-white font-bold">${authorDisplay}</p>
+            </div>
+        </div>
+    `;
+
+    // --- MEDIA ---
+    const mediaContainer = document.getElementById('detail-media');
+    if(item.imageUrl) {
+        mediaContainer.innerHTML = `<img src="${item.imageUrl}" class="w-full h-full object-cover">`;
+    } else {
+        mediaContainer.innerHTML = `<div class="w-full h-full bg-gray-800 flex flex-col items-center justify-center text-gray-500"><i class="fa-solid fa-image text-4xl mb-2"></i><span>No Image</span></div>`;
+    }
+
+    // --- ACTION BUTTONS ---
+    const btnContainer = document.querySelector('#modal-details .mt-8');
+    btnContainer.innerHTML = ''; 
+
+    const currentUsername = currentUser ? currentUser.username : "";
+    const isAuthor = currentUsername === item.authorName;
+
+    if (item.status === 'Resolved') {
+        btnContainer.innerHTML = `<div class="text-center text-green-500 font-bold text-xl py-4 border-t border-gray-700"><i class="fa-solid fa-check-circle"></i> ITEM RESOLVED</div>`;
+    } 
+    else if (isAuthor) {
+        btnContainer.innerHTML = `
+            <div class="bg-gray-800 p-4 rounded-lg mt-4 border border-gray-700">
+                <p class="text-gray-400 text-xs uppercase font-bold mb-2">Verify Claimant</p>
+                <div class="flex gap-2">
+                    <input type="text" id="verify-pin-input" placeholder="Enter PIN" class="w-full bg-black border border-gray-600 rounded p-2 text-white text-center font-bold tracking-widest outline-none focus:border-blue-500">
+                    <button onclick="window.verifyTransaction('${item._id}')" class="btn !w-auto bg-green-600 hover:bg-green-500 text-white">Verify</button>
+                </div>
+            </div>
+        `;
+    } 
+    else {
+        btnContainer.innerHTML = `
+            <div id="claim-section">
+                <button onclick="window.generateClaimPin('${item._id}')" class="btn w-full shadow-lg shadow-indigo-500/30 font-bold">
+                    ${item.type === 'Lost' ? 'I Found This!' : 'This is Mine!'}
+                </button>
+            </div>
+            <div id="pin-result-area" class="hidden mt-4 bg-blue-900/30 border border-blue-500/50 p-4 rounded text-center animate-pulse">
+                <p class="text-blue-300 text-xs uppercase font-bold">Show this PIN to Owner:</p>
+                <h1 id="generated-pin-display" class="text-4xl font-black text-white my-2 tracking-widest">----</h1>
+            </div>
+        `;
+    }
+
+    modal.classList.remove('hidden');
+};
+
+window.generateClaimPin = async function(id) {
+    const storedToken = localStorage.getItem('token');
+    if (!storedToken) {
+        alert("Session Expired. Please Login.");
+        window.openAuthModal('login');
+        return;
+    }
+
+    const btn = document.querySelector('#claim-section button');
+    if(btn) { btn.innerText = "Processing..."; btn.disabled = true; }
 
     try {
-        await fetch(`${API_URL}/messages`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json', ...authHeaders()},
-            body: JSON.stringify({
-                postId: currentChatPostId,
-                receiverId: currentChatReceiverId,
-                content
-            })
-        });
-        input.value = '';
-        // Immediate refresh
-        const item = items.find(i => i._id === currentChatPostId);
-        if(item.authorName === currentUser.username) {
-            openSpecificChat(currentChatPostId, currentChatReceiverId);
+        const res = await fetch(`${API_URL}/generate-pin/${id}`, {
+    method: 'POST',
+    headers: authHeaders()
+});
+
+        const data = await res.json();
+        
+        if (res.ok) {
+            document.getElementById('claim-section').classList.add('hidden');
+            const pinArea = document.getElementById('pin-result-area');
+            document.getElementById('generated-pin-display').innerText = data.pin;
+            pinArea.classList.remove('hidden');
         } else {
-            loadChat(item);
+            alert("Error: " + data.error);
+            if(btn) btn.disabled = false;
         }
-    } catch(e) { alert("Send failed"); }
+    } catch (e) { alert("Connection Error"); }
 };
 
-// --- MISC UTILS (PIN) ---
-window.generatePin = async function(id) {
-    if(!currentUser) return openAuthModal('login');
-    const res = await fetch(`${API_URL}/generate-pin/${id}`, { method: 'POST', headers: authHeaders() });
-    const data = await res.json();
-    if(data.pin) {
-        const el = document.getElementById('pin-display');
-        el.innerText = `PIN: ${data.pin}`;
-        el.classList.remove('hidden');
-    }
+window.verifyTransaction = async function(id) {
+    const storedToken = localStorage.getItem('token');
+    const pin = document.getElementById('verify-pin-input').value.trim();
+    if (!pin) return alert("Enter PIN");
+
+    try {
+        const res = await fetch(`${API_URL}/verify-pin/${id}`, {
+            method: 'POST',
+           headers: {
+    'Content-Type': 'application/json',
+    ...authHeaders()
+},
+
+            body: JSON.stringify({ pin })
+        });
+        const data = await res.json();
+
+        if (res.ok && data.success) {
+            alert("✅ Verified! Item Resolved.");
+            window.closeModals();
+            window.renderFeed('All'); 
+        } else {
+            alert("❌ Incorrect PIN.");
+        }
+    } catch (e) { alert("Connection Error"); }
 };
 
-window.verifyPin = async function(id) {
-    const pin = document.getElementById('verify-pin-input').value;
-    const res = await fetch(`${API_URL}/verify-pin/${id}`, {
-        method: 'POST',
-        headers: {'Content-Type':'application/json', ...authHeaders()},
-        body: JSON.stringify({ pin })
-    });
-    const data = await res.json();
-    if(data.success) { alert("Item Resolved!"); closeModals(); renderFeed(); }
-    else alert("Invalid PIN");
-};
+window.openReportModal = function(preType = 'Lost') {
+    if (!currentUser) { alert("Please login."); return window.openAuthModal('login'); }
+    document.getElementById('report-type').value = preType;
+    document.getElementById('form-report').reset();
+    document.getElementById('file-preview-container').classList.add('hidden');
+    uploadedFileBase64 = null;
+    document.getElementById('modal-report').classList.remove('hidden');
+}
+
+window.handleFileSelect = function(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        uploadedFileBase64 = e.target.result;
+        document.getElementById('file-preview-container').classList.remove('hidden');
+        document.getElementById('preview-content').innerHTML = `<img src="${uploadedFileBase64}" class="w-full h-full object-cover">`;
+    };
+    reader.readAsDataURL(file);
+}
+
+async function handleReportSubmit(e) {
+    e.preventDefault();
+    const storedToken = localStorage.getItem('token');
+    
+    const newItem = {
+        title: document.getElementById('report-title').value,
+        type: document.getElementById('report-type').value,
+        location: document.getElementById('report-location').value,
+        description: document.getElementById('report-desc').value,
+        date: document.getElementById('report-date').value + " • " + document.getElementById('report-time').value,
+        imageUrl: uploadedFileBase64
+    };
+
+    try {
+        const res = await fetch(`${API_URL}/posts`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': storedToken },
+            body: JSON.stringify(newItem)
+        });
+        if (res.ok) {
+            alert("Reported Successfully!");
+            renderFeed('All');
+            closeModals();
+        } else { alert("Failed to report."); }
+    } catch (err) { alert("Server Error."); }
+}
+
+// --- 5. MODAL CONTROL ---
 
 window.closeModals = function() {
-    document.querySelectorAll('[id^="modal-"]').forEach(el => el.classList.add('hidden'));
-    if(chatPollInterval) clearInterval(chatPollInterval);
+    document.getElementById('modal-report').classList.add('hidden');
+    document.getElementById('modal-details').classList.add('hidden');
+    document.getElementById('modal-auth').classList.add('hidden');
+    document.getElementById('modal-profile').classList.add('hidden');
+}
+
+window.toggleAdmin = function() { 
+    if(!currentUser) return alert("Login required"); 
+    alert("Admin Panel is Restricted."); 
 };
 
-window.openAuthModal = (mode) => {
-    document.getElementById('modal-auth').classList.remove('hidden');
-    if(mode === 'login') {
-        document.getElementById('auth-login-view').classList.remove('hidden');
-        document.getElementById('auth-register-view').classList.add('hidden');
-    } else {
-        document.getElementById('auth-login-view').classList.add('hidden');
-        document.getElementById('auth-register-view').classList.remove('hidden');
-        document.getElementById('reg-step-1').classList.remove('hidden');
-        document.getElementById('reg-step-2').classList.add('hidden');
+// ==========================================
+// NEW: REPUTATION & MEDAL LOGIC
+// ==========================================
+
+const RANKS = [
+    { min: 0,   name: "NOVICE",    color: "text-gray-400",   medalColor: "text-gray-600", next: 50 },
+    { min: 50,  name: "SCOUT",     color: "text-blue-400",   medalColor: "text-amber-700", next: 100 },
+    { min: 100, name: "DETECTIVE", color: "text-purple-400", medalColor: "text-slate-300", next: 250 },
+    { min: 250, name: "HERO",      color: "text-yellow-400", medalColor: "text-yellow-400", next: 1000 }
+];
+
+window.openProfileModal = function() {
+    if(!currentUser) return alert("Please login to view reputation.");
+    
+    const points = currentUser.reputation || 0;
+    const userDisplay = currentUser.username.split('@')[0];
+
+    // Find Rank
+    let rank = RANKS[0];
+    for (let i = 0; i < RANKS.length; i++) {
+        if (points >= RANKS[i].min) rank = RANKS[i];
     }
+
+    document.getElementById('profile-username').innerText = userDisplay;
+    document.getElementById('profile-points').innerText = points;
+    
+    const tagEl = document.getElementById('profile-tag');
+    tagEl.innerText = rank.name + " INVESTIGATOR";
+    tagEl.className = `text-xs uppercase tracking-widest font-bold mb-6 ${rank.color}`;
+
+    document.getElementById('profile-medal').className = `text-6xl drop-shadow-lg transition-transform hover:scale-110 duration-300 ${rank.medalColor}`;
+
+    const nextGoal = rank.next;
+    const percent = Math.min(100, (points / nextGoal) * 100);
+    document.getElementById('profile-progress').style.width = `${percent}%`;
+    document.getElementById('profile-next').innerText = `${nextGoal - points} pts to next rank`;
+
+    document.getElementById('modal-profile').classList.remove('hidden');
 };
 
-window.handleFileSelect = function(e) {
-    const file = e.target.files[0];
-    if(!file) return;
-    const reader = new FileReader();
-    reader.onload = (evt) => uploadedFileBase64 = evt.target.result;
-    reader.readAsDataURL(file);
-};
+// ==========================================
+// MOBILE MENU & HAMBURGER ANIMATION
+// ==========================================
+
+window.toggleMobileMenu = function() {
+    const menu = document.getElementById('mobile-menu');
+    const btn = document.getElementById('hamburger-btn');
+    
+    // 1. Toggle the Menu Panel (Slide/Fade in)
+    menu.classList.toggle('menu-open');
+    
+    // 2. Toggle the "Active" class (Triggers the X animation)
+    btn.classList.toggle('active');
+    
+    // Debugging: Check console to see if it works
+    console.log("Menu Toggled. Class list:", menu.classList);
+}
+
+// Close menu when clicking outside
+document.addEventListener('click', function(event) {
+    const menu = document.getElementById('mobile-menu');
+    const btn = document.getElementById('hamburger-btn');
+
+    // Only check if the menu is currently OPEN
+    if (menu && menu.classList.contains('menu-open')) {
+        // If the click is NOT inside the menu AND NOT on the button
+        if (!menu.contains(event.target) && !btn.contains(event.target)) {
+            menu.classList.remove('menu-open');
+            btn.classList.remove('active');
+        }
+    }
+});
