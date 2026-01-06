@@ -252,7 +252,12 @@ nav.scrolled-mode #logo-text {
     max-width: 320px;          /* optional: limit size */
     height: 100%;
     margin: 0;
-    background: #eee;
+    .sliding-menu {
+    background: rgba(30, 30, 30, 0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
     display: flex;
     flex-direction: column;
 }
@@ -530,7 +535,10 @@ nav.scrolled-mode #logo-text {
       width: 85% !important;     /* smaller than full screen */
       max-width: 320px;
       height: calc(100vh - 60px);
-      background: #eee;
+      #mobile-menu {
+    background: none !important;
+    box-shadow: none !important;
+}
       box-shadow: 4px 0 20px rgba(0,0,0,0.4);
       transform: translateX(-100%); /* hidden by default */
       transition: transform 0.4s ease;
@@ -574,7 +582,11 @@ nav.scrolled-mode #logo-text {
     width: 80% !important;     /* phone ke hisaab se size */
     max-width: 320px;
     height: calc(100vh - 60px);
-    background: #eee;
+    #mobile-menu {
+    background: none !important;
+    box-shadow: none !important;
+}
+
     box-shadow: 4px 0 20px rgba(0,0,0,0.4);
     transform: translateX(-100%); /* default hidden */
     transition: transform 0.4s ease;
