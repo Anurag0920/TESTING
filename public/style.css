@@ -253,7 +253,7 @@ nav.scrolled-mode #logo-text {
     height: 100%;
     margin: 0;
     .sliding-menu {
-    background: rgb(25, 25, 25);   /* SOLID bg */
+    background: rgb(25, 25, 25, 0.85);   /* SOLID bg */
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
 }
@@ -541,7 +541,7 @@ backdrop-filter: blur(10px);
       width: 85% !important;     /* smaller than full screen */
       max-width: 320px;
       height: calc(100vh - 60px);
-      background: rgb(25, 25, 25);   /* solid */
+      background: rgb(25, 25, 25, 0.85);   /* solid */
 backdrop-filter: blur(14px);
 -webkit-backdrop-filter: blur(14px);
 
@@ -589,7 +589,7 @@ backdrop-filter: blur(14px);
     width: 80% !important;     /* phone ke hisaab se size */
     max-width: 320px;
     height: calc(100vh - 60px);
-    background: rgb(25, 25, 25);   /* solid */
+    background: rgb(25, 25, 25, 0.85);   /* solid */
 backdrop-filter: blur(14px);
 -webkit-backdrop-filter: blur(14px);
 
