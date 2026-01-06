@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Misplaced Mansion</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css"> 
+</head>
+<body>
+    <div class="ambient-glow glow-1"></div>
+    <div class="ambient-glow glow-2"></div>
+
+    <nav class="fixed top-0 left-0 w-full z-50 transition-all duration-500 border-b border-transparent" id="main-nav">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-20 relative">
+                <div class="flex items-center">
+                    <button id="hamburger-btn" onclick="toggleMobileMenu()" class="z-[70] relative w-10 h-10 flex justify-center items-center focus:outline-none"><div class="bar"></div></button>
+                    <div class="flex items-center cursor-pointer transition-all duration-300 ml-4" id="nav-logo" onclick="showSection('hero')">
+                        <span class="text-xl font-bold text-white font-serif-custom tracking-wider">Misplaced Mansion</span>
+                    </div>
+                </div>
+                <div id="desktop-menu" class="hidden md:flex items-center space-x-8 transition-all duration-300 origin-right">
+                    <a href="#" onclick="showSection('hero')" class="nav-link text-gray-300 hover:text-white text-sm font-bold uppercase tracking-wide">Home</a>
+                    <a href="#browse" onclick="renderFeed('All')" class="nav-link text-gray-300 hover:text-white text-sm font-bold uppercase tracking-wide">Browse</a>
+                    <div id="nav-auth-section" class="flex items-center space-x-4"></div>
+                </div>
+            </div>
+        </div>
+        <div id="mobile-menu" class="glass-panel m-2 absolute top-20 left-0 w-[calc(100%-16px)] z-[60] transform origin-top scale-y-0 opacity-0 pointer-events-none transition-all duration-500 ease-in-out">
+            <nav class="sliding-menu">
+                <ul>
+                    <li><a onclick="renderFeed('All'); toggleMobileMenu()">Browse Items</a></li>
+                    <li><a onclick="openReportModal(); toggleMobileMenu()">Report Item</a></li>
+                </ul>
+                <div id="mobile-auth-section"></div>
+            </nav>
+        </div>
+    </nav>
+
+    <div id="public-view" class="pt-20">
+        <section id="hero" class="min-h-[60vh] flex flex-col justify-center items-center text-center px-4">
+            <h1 class="text-5xl md:text-7xl font-black font-serif-custom text-white mb-6 leading-tight drop-shadow-2xl">
+                Reuniting Belongings
+            </h1>
+            <div class="flex gap-4 justify-center">
+                <button onclick="openReportModal('Lost')" class="btn !w-auto">I Lost Something</button>
+                <button onclick="openReportModal('Found')" class="btn !w-auto bg-transparent border border-white">I Found Something</button>
+            </div>
+        </section>
+
+        <section id="browse" class="py-20 px-4 max-w-7xl mx-auto">
+            <div class="flex flex-col md:flex-row justify-between items-end mb-10 border-b border-gray-700 pb-4 gap-4">
+                <h2 class="text-3xl font-bold font-serif-custom text-white">Live Registry</h2>
+                <div class="flex flex-col md:flex-row gap-3 w-full md:w-auto">
+                    <div class="relative group w-full md:w-auto">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"></i>
+                        <input type="text" id="search-input" placeholder="Search..." class="bg-gray-800 border border-gray-700 text-gray-300 text-xs rounded-lg pl-10 pr-4 py-2 w-full md:w-64 outline-none focus:border-blue-500">
+                    </div>
+                    <div class="flex gap-2">
+                        <button class="px-4 py-2 rounded-lg bg-blue-600 text-white text-xs font-bold" onclick="renderFeed('All')">All</button>
+                        <button class="px-4 py-2 rounded-lg bg-gray-800 text-gray-300 text-xs font-bold" onclick="renderFeed('Lost')">Lost</button>
+                        <button class="px-4 py-2 rounded-lg bg-gray-800 text-gray-300 text-xs font-bold" onclick="renderFeed('Found')">Found</button>
+                    </div>
+                </div>
+            </div>
+            <div id="feed-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+        </section>
+    </div>
+
+    <div id="modal-auth" class="fixed inset-0 z-[99999] hidden">
+        <div class="absolute inset-0 bg-black/90 backdrop-blur-md" onclick="closeModals()"></div>
+        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md">
+            <div class="glass-panel p-8 relative">
+                <button onclick="closeModals()" class="absolute top-4 right-4 text-gray-400"><i class="fa-solid fa-xmark"></i></button>
+                <div id="auth-login-view">
+                    <h2 class="text-2xl font-bold text-white mb-4">Login</h2>
+                    <input type="email" id="login-email" placeholder="Email" class="w-full mb-3 p-3 rounded bg-black/30 border border-gray-600 text-white">
+                    <input type="password" id="login-pass" placeholder="Password" class="w-full mb-4 p-3 rounded bg-black/30 border border-gray-600 text-white">
+                    <button onclick="window.loginUser()" class="btn w-full">Sign In</button>
+                    <p class="text-xs text-gray-500 mt-4 cursor-pointer" onclick="toggleAuthMode('register')">Create Account</p>
+                </div>
+                <div id="auth-register-view" class="hidden">
+                    <h2 class="text-2xl font-bold text-white mb-4">Register</h2>
+                    <div id="reg-step-1">
+                        <input type="email" id="reg-email" placeholder="student@gmail.com" class="w-full mb-3 p-3 rounded bg-black/30 border border-gray-600 text-white">
+                        <button onclick="window.sendOtp()" class="btn w-full">Send OTP</button>
+                    </div>
+                    <div id="reg-step-2" class="hidden">
+                        <input type="text" id="reg-otp" placeholder="OTP" class="w-full mb-3 p-3 rounded bg-black/30 text-white text-center tracking-widest">
+                        <input type="password" id="reg-pass" placeholder="Password" class="w-full mb-4 p-3 rounded bg-black/30 text-white">
+                        <button onclick="window.completeRegistration()" class="btn w-full">Complete</button>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-4 cursor-pointer" onclick="toggleAuthMode('login')">Back to Login</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-profile" class="fixed inset-0 z-[99999] hidden">
+        <div class="absolute inset-0 bg-black/90 backdrop-blur-sm" onclick="closeModals()"></div>
+        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-sm">
+            <div class="glass-panel p-8 text-center relative rounded-2xl border border-white/10 bg-gray-900">
+                <button onclick="closeModals()" class="absolute top-4 right-4 text-gray-400"><i class="fa-solid fa-xmark"></i></button>
+                
+                <div class="relative w-24 h-24 mx-auto mb-4 group cursor-pointer" onclick="document.getElementById('profile-pic-input').click()">
+                    <img id="profile-img-display" src="" class="w-full h-full rounded-full object-cover border-4 border-slate-700 bg-slate-800">
+                    <div class="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+                        <i class="fa-solid fa-camera text-white"></i>
+                    </div>
+                    <input type="file" id="profile-pic-input" class="hidden" accept="image/*" onchange="handleProfilePicSelect(event)">
+                </div>
+
+                <h2 id="profile-username" class="text-xl font-bold text-white mb-1">Username</h2>
+                
+                <p id="profile-bio" class="text-sm text-gray-400 mb-4 italic">"Bio goes here..."</p>
+                <input type="text" id="profile-bio-input" class="hidden w-full bg-black/50 border border-gray-600 rounded p-2 text-white text-xs mb-4 text-center">
+
+                <button id="btn-edit-profile" onclick="toggleEditProfile()" class="text-xs text-blue-400 hover:text-white border border-blue-500/50 rounded px-3 py-1 mb-6">Edit Profile</button>
+                <button id="btn-save-profile" onclick="saveProfile()" class="hidden btn !h-8 !text-xs mb-6">Save Changes</button>
+
+                <div class="bg-white/5 rounded-xl p-4 border border-white/10 text-left">
+                    <div class="flex justify-between items-end mb-2">
+                        <span class="text-xs text-gray-400 uppercase font-bold">Reputation</span>
+                        <span id="profile-points" class="text-2xl font-black text-white">0</span>
+                    </div>
+                    <div class="w-full bg-gray-700 h-2 rounded-full overflow-hidden">
+                        <div id="profile-progress" class="bg-blue-500 h-full w-0"></div>
+                    </div>
+                    <p id="profile-tag" class="text-[10px] text-right text-gray-500 mt-1">RANK</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-details" class="fixed inset-0 z-[99999] hidden">
+        <div class="absolute inset-0 bg-black/80 backdrop-blur-sm" onclick="closeModals()"></div>
+        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-4xl h-[80vh]">
+            <div class="w-full h-full bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden flex flex-col md:flex-row relative">
+                <button onclick="closeModals()" class="absolute top-4 right-4 z-50 text-gray-400 hover:text-white bg-black/50 rounded-full w-8 h-8 flex items-center justify-center transition cursor-pointer"><i class="fa-solid fa-xmark"></i></button>
+                
+                <div class="w-full md:w-1/2 p-0 flex flex-col border-r border-slate-700">
+                    <div id="detail-media" class="h-1/2 bg-black relative"></div>
+                    <div class="p-6 h-1/2 overflow-y-auto bg-slate-900">
+                        <span id="detail-type" class="text-xs font-black tracking-widest uppercase mb-2 text-blue-400"></span>
+                        <h2 id="detail-title" class="text-2xl font-bold text-white mb-2 leading-tight"></h2>
+                        <p id="detail-loc" class="text-xs text-gray-400 mb-4"></p>
+                        <p id="detail-desc" class="text-sm text-gray-300 leading-relaxed"></p>
+                        
+                        <div id="detail-actions" class="mt-6 pt-4 border-t border-slate-800"></div>
+                    </div>
+                </div>
+
+                <div class="w-full md:w-1/2 bg-black flex flex-col relative">
+                    <div class="p-4 border-b border-gray-800 bg-gray-900/50">
+                        <h3 class="text-sm font-bold text-white"><i class="fa-solid fa-comments mr-2 text-blue-500"></i> Communication Channel</h3>
+                    </div>
+                    
+                    <div id="chat-display" class="flex-grow p-4 overflow-y-auto space-y-3 bg-black/50">
+                        <div class="text-center text-gray-600 text-xs mt-10">Select a conversation or start chatting.</div>
+                    </div>
+
+                    <div id="chat-input-area" class="p-3 border-t border-gray-800 bg-gray-900 hidden">
+                        <div class="flex gap-2">
+                            <input type="text" id="chat-msg-input" placeholder="Type a message..." class="flex-grow bg-gray-800 border border-gray-700 rounded p-2 text-white text-sm outline-none focus:border-blue-500">
+                            <button onclick="sendChatMessage()" class="bg-blue-600 text-white px-4 rounded font-bold text-sm hover:bg-blue-500"><i class="fa-solid fa-paper-plane"></i></button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-report" class="fixed inset-0 z-[99999] hidden">
+        <div class="absolute inset-0 bg-black/80 backdrop-blur-sm" onclick="closeModals()"></div>
+        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg">
+            <div class="glass-panel p-8 relative max-h-[90vh] overflow-y-auto">
+                <button onclick="closeModals()" class="absolute top-4 right-4 text-gray-400"><i class="fa-solid fa-xmark"></i></button>
+                <h2 class="text-2xl font-black text-white font-serif-custom mb-6">Report Item</h2>
+                <form id="form-report">
+                    <div class="space-y-4">
+                        <input type="text" id="report-title" placeholder="Item Name" required class="w-full bg-black/30 border border-gray-600 rounded p-3 text-white">
+                        <div class="grid grid-cols-2 gap-4">
+                            <select id="report-type" class="w-full bg-black/30 border border-gray-600 rounded p-3 text-white"><option value="Lost">Lost</option><option value="Found">Found</option></select>
+                            <input type="text" id="report-location" placeholder="Location" required class="w-full bg-black/30 border border-gray-600 rounded p-3 text-white">
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <input type="date" id="report-date" required class="w-full bg-black/30 border border-gray-600 rounded p-3 text-white [color-scheme:dark]">
+                            <input type="time" id="report-time" required class="w-full bg-black/30 border border-gray-600 rounded p-3 text-white [color-scheme:dark]">
+                        </div>
+                        <textarea id="report-desc" placeholder="Details..." required class="w-full bg-black/30 border border-gray-600 rounded p-3 text-white h-24"></textarea>
+                        <input type="file" id="report-file" accept="image/*" class="text-gray-400 text-xs" onchange="handleFileSelect(event)">
+                        <button type="submit" class="btn w-full">Submit Report</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
